@@ -240,7 +240,7 @@ impl<'a> BuildPass<'a> {
     ) -> Result<BuiltBinary> {
         // Setup the linker args based on the associated path provided by the linker generation
         // phase.
-        let linker_args = format!(
+        let mut linker_args = format!(
             "-C link-arg=-T{} -C link-arg=-L{}",
             &app.linker_script.display(),
             app.linker_script
@@ -248,6 +248,16 @@ impl<'a> BuildPass<'a> {
                 .ok_or_else(|| anyhow!("Invalid linker script {}", app.linker_script.display()))?
                 .display()
         );
+        let is_rom = self
+            .build_definition
+            .rom
+            .as_ref()
+            .is_some_and(|r| r.name == app.name);
+        if let (true, Some(extra)) = (is_rom, &self.build_args.rom_link_args) {
+            for arg in extra.split_whitespace() {
+                linker_args.push_str(&format!(" -C link-arg={arg}"));
+            }
+        }
 
         // Instantiate the rustc command
         let mut cmd = Command::new("cargo");

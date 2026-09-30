@@ -130,6 +130,11 @@ pub struct BuildArgs {
     #[arg(long)]
     pub rom_features: Option<String>,
 
+    /// If specified extra linker arguments for the rom binary, e.g. `--icf=none`.  Multiple
+    /// arguments are separated by whitespace; each is passed as `-C link-arg=<arg>`.
+    #[arg(long)]
+    pub rom_link_args: Option<String>,
+
     /// If specified the features to enable for the runtime binaries (kernel and apps) being
     /// compiled.  Multiple features can be specified as follows: `feature_a,feature_b,etc...`.
     #[arg(long)]
