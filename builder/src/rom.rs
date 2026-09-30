@@ -5,37 +5,83 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 
-use crate::utils::manifest_file;
+use crate::utils::{manifest_file, manifest_file_for_profile};
 use crate::{CaliptraBuildArgs, PROJECT_ROOT};
 use caliptra_image_crypto::RustCrypto as Crypto;
 use caliptra_image_gen::{from_hw_format, ImageGeneratorCrypto};
+use caliptra_mcu_config_emulator::ROM_PATCH_REGION_START;
 use caliptra_mcu_firmware_bundler::args::{BuildArgs, Commands, Common, LdArgs};
+use caliptra_mcu_firmware_bundler::manifest::RuntimeMemory;
+
+const ROM_PATCHING_FEATURE: &str = "rom-patching";
 
 pub fn rom_build(args: &CaliptraBuildArgs) -> Result<PathBuf> {
     let platform = args.platform;
+    let platform_name = platform.unwrap_or("emulator");
     let features = args.features;
     let target_dir = args.target_dir.clone();
+    let rom_patching = feature_enabled(features, ROM_PATCHING_FEATURE);
+
+    if rom_patching && platform_name != "emulator" {
+        bail!("rom-patching is emulator-only");
+    }
 
     let feature_suffix = match &features {
         Some(f) if !f.is_empty() => format!("-{f}"),
         _ => String::new(),
     };
 
-    let target_name = format!("mcu-rom-{}", platform.unwrap_or("emulator"));
+    let target_name = format!("mcu-rom-{platform_name}");
     let rom = format!("{target_name}{feature_suffix}");
-    let manifest = manifest_file(platform, false)?;
-    let common = Common {
-        manifest,
-        target_dir,
-        ..Default::default()
+    let common = if rom_patching {
+        let profile = args.profile.unwrap_or("release");
+        let common = Common {
+            manifest: manifest_file_for_profile(platform, false, Some(profile))?,
+            target_dir,
+            profile: profile.to_string(),
+            ..Default::default()
+        };
+        ensure_patch_copy_does_not_overlap_runtime(&common)?;
+        common
+    } else {
+        Common {
+            manifest: manifest_file(platform, false)?,
+            target_dir,
+            ..Default::default()
+        }
     };
-    let rom_size = rom_size_for_platform(platform.unwrap_or("emulator"));
+    let ld = if rom_patching {
+        LdArgs {
+            rom_ld_base: Some(
+                PROJECT_ROOT
+                    .join("firmware-bundler")
+                    .join("data")
+                    .join("emulator-rom-patching-layout.ld"),
+            ),
+            ..Default::default()
+        }
+    } else {
+        LdArgs::default()
+    };
+    let rom_size = rom_size_for_platform(platform_name);
     let rom_binary = common.release_dir().map(|t| t.join(format!("{rom}.bin")))?;
     let build_cmd = Commands::Build {
         common,
-        ld: LdArgs::default(),
+        ld,
         build: BuildArgs {
             rom_features: features.filter(|s| !s.is_empty()).map(|s| s.to_string()),
+            // --icf=none: disable identical code folding (ICF), which merges functions with
+            // identical machine code. Editing one function can make it differ from its twin, so
+            // the linker stops folding them and symbols move. The patch builder fails if any
+            // section or symbol address or size differs between the baseline and patched ELFs.
+            // --orphan-handling=error: fail the link if an input section (e.g. .srodata*) is not
+            // placed by the linker script. Otherwise the linker places it silently, possibly
+            // outside the patchable copy. Add it to the patching layout to fix.
+            rom_link_args: rom_patching.then(|| {
+                format!(
+                    "--icf=none --orphan-handling=error --defsym=PATCH_FUNCS_START={ROM_PATCH_REGION_START:#x}"
+                )
+            }),
             no_default_features: true,
             ..Default::default()
         },
@@ -76,6 +122,29 @@ pub fn append_rom_digest(binary: &PathBuf, rom_size: usize) -> Result<()> {
     let digest = from_hw_format(&crypto.sha384_digest(&data[0..digest_offset])?);
     data[digest_offset..].copy_from_slice(&digest);
     std::fs::write(binary, data)?;
+    Ok(())
+}
+
+fn feature_enabled(features: Option<&str>, needle: &str) -> bool {
+    features
+        .unwrap_or_default()
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .any(|feature| feature == needle)
+}
+
+fn ensure_patch_copy_does_not_overlap_runtime(common: &Common) -> Result<()> {
+    let manifest = common.manifest()?;
+    let RuntimeMemory::Sram(runtime_sram) = manifest.platform.runtime_memory else {
+        return Ok(());
+    };
+    let runtime_end = runtime_sram.offset + runtime_sram.size;
+    let patch_region_start = u64::from(ROM_PATCH_REGION_START);
+    if runtime_end > patch_region_start {
+        bail!(
+            "rom-patching requires runtime SRAM to end at or below {patch_region_start:#x}; manifest {} ends at {runtime_end:#x}",
+            common.manifest.display()
+        );
+    }
     Ok(())
 }
 

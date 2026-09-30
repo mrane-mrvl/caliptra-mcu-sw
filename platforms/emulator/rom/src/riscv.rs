@@ -16,9 +16,6 @@ Abstract:
 
 use crate::io::{EMULATOR_EXITER, EMULATOR_WRITER, FATAL_ERROR_HANDLER};
 
-#[cfg(target_arch = "riscv32")]
-core::arch::global_asm!(include_str!("start.s"));
-
 use crate::flash::flash_boot_cfg::FlashBootCfg;
 use crate::flash::flash_drv::{
     EmulatedFlashCtrl, PRIMARY_FLASH_CTRL_BASE, SECONDARY_FLASH_CTRL_BASE,
@@ -177,11 +174,84 @@ pub static MCU_MEMORY_MAP: McuMemoryMap = caliptra_mcu_config_emulator::EMULATOR
 #[used]
 pub static MCU_STRAPS: McuStraps = caliptra_mcu_config_emulator::EMULATOR_MCU_STRAPS;
 
+/// Address the branch out of `boot::start` landed on. Captured before the
+/// printer exists and reported by `report_execution_address` once `rom_entry`
+/// brings it up. Lives in `.bss`, which `start.s` zeroes before `main`.
+#[cfg(feature = "rom-patching")]
+static mut PATCHABLE_ENTRY_PC: u32 = 0;
+
+/// Reads the program counter. `auipc rd, 0` computes `pc + 0`, so the value is
+/// the address of the `auipc` itself -- an address in the SRAM patch window
+/// proves the patched copy is executing, not the ROM original.
+#[cfg(feature = "rom-patching")]
+#[inline(always)]
+fn read_pc() -> u32 {
+    let pc: u32;
+    unsafe {
+        core::arch::asm!("auipc {pc}, 0", pc = out(reg) pc, options(nomem, nostack, preserves_flags));
+    }
+    pc
+}
+
+// Never inlined: inlining it into `boot::start` could pull `rom_entry` (its
+// only caller) into the non-patchable ROM section.
+#[cfg(feature = "rom-patching")]
+#[no_mangle]
+#[inline(never)]
+pub extern "C" fn patchable_entry() -> ! {
+    let pc = read_pc();
+    unsafe {
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(PATCHABLE_ENTRY_PC), pc);
+    }
+    rom_entry()
+}
+
+/// Reports where the ROM is executing from. Must be called after
+/// `set_printer`; `patchable_entry` itself runs before the UART exists, which
+/// is why it stashes its address instead of printing it.
+#[cfg(feature = "rom-patching")]
+fn report_execution_address() {
+    let entry_pc = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(PATCHABLE_ENTRY_PC)) };
+    caliptra_mcu_romtime::println!(
+        "[mcu-rom] executing from {} (entered patchable copy at {})",
+        HexWord(read_pc()),
+        HexWord(entry_pc)
+    );
+}
+
+#[cfg(not(feature = "rom-patching"))]
+fn report_execution_address() {}
+
+/// Number of 4 KiB MCU SRAM blocks firmware is authorized to load into, minus
+/// one: MCI sizes the exec region as `(value + 1) * 4 KiB`.
+///
+/// Under `rom-patching` the patchable ROM copy is executing from SRAM at
+/// `ROM_PATCH_REGION_START` while firmware is being loaded, so the authorized
+/// region must stop below it. The build-time check in `builder::rom` only
+/// bounds where the runtime image is *linked*; this MCI register is what gates
+/// the load at runtime, so both are needed.
+///
+/// Without the feature this returns `default` unchanged, so the stock value
+/// (or `rom_start`'s own fallback, for `None`) is untouched.
+#[cfg(feature = "rom-patching")]
+fn fw_sram_exec_region_size(_default: Option<u32>) -> Option<u32> {
+    Some(
+        (caliptra_mcu_config_emulator::ROM_PATCH_REGION_START - MCU_MEMORY_MAP.sram_offset) / 4096
+            - 1,
+    )
+}
+
+#[cfg(not(feature = "rom-patching"))]
+fn fw_sram_exec_region_size(default: Option<u32>) -> Option<u32> {
+    default
+}
+
 pub extern "C" fn rom_entry() -> ! {
     unsafe {
         #[allow(static_mut_refs)]
         caliptra_mcu_romtime::set_printer(&mut EMULATOR_WRITER);
     }
+    report_execution_address();
     unsafe {
         #[allow(static_mut_refs)]
         caliptra_mcu_rom_common::set_fatal_error_handler(&mut FATAL_ERROR_HANDLER);
@@ -261,6 +331,7 @@ pub extern "C" fn rom_entry() -> ! {
             cptra_dma_axi_user: axi_user0,
             mci_mbox0_axi_users: mbox_axi_users,
             mci_mbox1_axi_users: mbox_axi_users,
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(None),
             ..Default::default()
         });
     } else if cfg!(any(
@@ -283,6 +354,7 @@ pub extern "C" fn rom_entry() -> ! {
             cptra_dma_axi_user: axi_user0,
             mci_mbox0_axi_users: mbox_axi_users,
             mci_mbox1_axi_users: mbox_axi_users,
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(None),
             ..Default::default()
         };
         caliptra_mcu_rom_common::rom_start(rom_parameters);
@@ -302,6 +374,7 @@ pub extern "C" fn rom_entry() -> ! {
             cptra_dma_axi_user: axi_user0,
             mci_mbox0_axi_users: mbox_axi_users,
             mci_mbox1_axi_users: mbox_axi_users,
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(None),
             ..Default::default()
         });
     } else if cfg!(feature = "test-svn-manifest") {
@@ -338,6 +411,7 @@ pub extern "C" fn rom_entry() -> ! {
             cptra_dma_axi_user: axi_user0,
             mci_mbox0_axi_users: mbox_axi_users,
             mci_mbox1_axi_users: mbox_axi_users,
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(None),
             ..Default::default()
         });
     } else if cfg!(feature = "flash-boot") {
@@ -368,6 +442,7 @@ pub extern "C" fn rom_entry() -> ! {
             cptra_dma_axi_user: axi_user0,
             mci_mbox0_axi_users: mbox_axi_users,
             mci_mbox1_axi_users: mbox_axi_users,
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(None),
             ..Default::default()
         });
     } else {
@@ -532,11 +607,11 @@ pub extern "C" fn rom_entry() -> ! {
             } else {
                 &[]
             },
-            mcu_fw_sram_exec_region_size: Some(
+            mcu_fw_sram_exec_region_size: fw_sram_exec_region_size(Some(
                 (MCU_MEMORY_MAP.sram_size - MCU_MEMORY_MAP.storage_size) / 4096
                     - caliptra_mcu_rom_common::MCU_SRAM_DEFAULT_PROTECTED_REGION_BLOCKS
                     - 1,
-            ),
+            )),
             ..Default::default()
         });
     }

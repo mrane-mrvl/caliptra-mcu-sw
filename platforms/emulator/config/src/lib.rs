@@ -5,6 +5,11 @@
 pub mod flash;
 use caliptra_mcu_config::{McuMemoryMap, McuStraps, MemoryRegionType};
 
+/// Start of the ROM patching SRAM region (`.patch_funcs`, then the patchable
+/// ROM copy). MCU RT must end at or below it. The builder passes it to
+/// `firmware-bundler/data/emulator-rom-patching-layout.ld` as `PATCH_FUNCS_START`.
+pub const ROM_PATCH_REGION_START: u32 = 0x4008_0000;
+
 pub const EMULATOR_MEMORY_MAP: McuMemoryMap = McuMemoryMap {
     rom_offset: 0x8000_0000,
     rom_size: 64 * 1024,
@@ -58,6 +63,17 @@ pub const EMULATOR_MEMORY_MAP: McuMemoryMap = McuMemoryMap {
     lc_size: 0x8c,
     lc_properties: MemoryRegionType::MMIO,
 };
+
+// The patch region must be a nonzero, 4 KiB-aligned offset inside SRAM: the ROM
+// derives the firmware exec-region block count from it (see
+// `fw_sram_exec_region_size` in platforms/emulator/rom/src/riscv.rs), and MCI
+// cannot express an empty exec region.
+const _: () = assert!(ROM_PATCH_REGION_START > EMULATOR_MEMORY_MAP.sram_offset);
+const _: () = assert!(
+    ROM_PATCH_REGION_START < EMULATOR_MEMORY_MAP.sram_offset + EMULATOR_MEMORY_MAP.sram_size
+);
+const _: () =
+    assert!((ROM_PATCH_REGION_START - EMULATOR_MEMORY_MAP.sram_offset).is_multiple_of(4096));
 
 const ACTIVE_I3C: u8 = if cfg!(feature = "active-i3c1") { 1 } else { 0 };
 
