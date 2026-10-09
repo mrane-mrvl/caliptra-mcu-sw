@@ -1971,6 +1971,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "caliptra-mcu-rom-patch"
+version = "0.1.0"
+dependencies = [
+ "caliptra-mcu-error",
+]
+
+[[package]]
 name = "caliptra-mcu-romtime"
 version = "0.1.0"
 dependencies = [
@@ -4722,6 +4729,7 @@ dependencies = [
  "caliptra-mcu-image-header",
  "caliptra-mcu-registers-generated",
  "caliptra-mcu-rom-common",
+ "caliptra-mcu-rom-patch",
  "caliptra-mcu-romtime",
  "riscv-csr",
  "rv32i",

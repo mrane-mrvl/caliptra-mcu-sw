@@ -10,6 +10,17 @@ use caliptra_mcu_config::{McuMemoryMap, McuStraps, MemoryRegionType};
 /// `firmware-bundler/data/emulator-rom-patching-layout.ld` as `PATCH_FUNCS_START`.
 pub const ROM_PATCH_REGION_START: u32 = 0x4008_0000;
 
+/// Fixed SRAM address of the ROM patch blob, shared by the ROM and the test
+/// that injects it. The builder passes it and [`ROM_PATCH_BLOB_SIZE`] to the
+/// patching layout as `PATCH_BLOB_START`/`PATCH_BLOB_LENGTH`.
+pub const ROM_PATCH_BLOB_START: u32 = 0x400F_0000;
+/// Size of the ROM patch blob window. `apply` is given all of it.
+pub const ROM_PATCH_BLOB_SIZE: u32 = 0x400;
+
+/// Start of the MCI-owned protected region at the top of SRAM; the patch blob
+/// must end below it.
+const MCI_PROTECTED_REGION_START: u32 = 0x400F_7000;
+
 pub const EMULATOR_MEMORY_MAP: McuMemoryMap = McuMemoryMap {
     rom_offset: 0x8000_0000,
     rom_size: 64 * 1024,
@@ -74,6 +85,8 @@ const _: () = assert!(
 );
 const _: () =
     assert!((ROM_PATCH_REGION_START - EMULATOR_MEMORY_MAP.sram_offset).is_multiple_of(4096));
+const _: () = assert!(ROM_PATCH_BLOB_START > ROM_PATCH_REGION_START);
+const _: () = assert!(ROM_PATCH_BLOB_START + ROM_PATCH_BLOB_SIZE <= MCI_PROTECTED_REGION_START);
 
 const ACTIVE_I3C: u8 = if cfg!(feature = "active-i3c1") { 1 } else { 0 };
 

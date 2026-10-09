@@ -10,14 +10,21 @@ ENTRY(_start)
 ROM_DIGEST_SIZE = 48;
 
 /*
- * ROM patching SRAM layout. PATCH_FUNCS_START is not defined here: the builder
- * passes it as `--defsym` from `caliptra_mcu_config_emulator::ROM_PATCH_REGION_START`,
- * so the Rust overlap check and this layout share one value.
+ * ROM patching SRAM layout. PATCH_FUNCS_START, PATCH_BLOB_START and
+ * PATCH_BLOB_LENGTH are not defined here: the builder passes them as `--defsym`
+ * from `caliptra_mcu_config_emulator` (`ROM_PATCH_REGION_START`,
+ * `ROM_PATCH_BLOB_START`, `ROM_PATCH_BLOB_SIZE`), so Rust and this layout share
+ * one value each.
  */
 PATCH_FUNCS_LENGTH = 0x400;
 PATCH_TEXT_START = PATCH_FUNCS_START + PATCH_FUNCS_LENGTH;
 PATCH_TEXT_LENGTH = 0x10000;
-PATCH_BLOB_START = 0x400F0000;
+/*
+ * Instruction RAM: `.patch_funcs` then the patchable copy, one offset space.
+ * `boot.rs` hands this whole window to the patch `apply`.
+ */
+PATCH_IRAM_START = PATCH_FUNCS_START;
+PATCH_IRAM_END = PATCH_TEXT_START + PATCH_TEXT_LENGTH;
 
 /*
  * `.data`/`.bss` are pinned below the top of ROM RAM so their addresses do not

@@ -18,6 +18,7 @@ caliptra-mcu-error.workspace = true
 caliptra-mcu-image-header.workspace = true
 caliptra-mcu-rom-common.workspace = true
 caliptra-mcu-registers-generated.workspace = true
+caliptra-mcu-rom-patch = { workspace = true, features = ["rom"], optional = true }
 caliptra-mcu-romtime.workspace = true
 tock-registers.workspace = true
 zeroize.workspace = true
@@ -55,4 +56,4 @@ active-i3c1 = ["caliptra-mcu-config-emulator/active-i3c1"]
 test-i3c-services = ["caliptra-mcu-rom-common/test-i3c-services"]
 test-dot-recovery-reset-flow = ["caliptra-mcu-rom-common/test-dot-recovery-reset-flow"]
 test-rom-hooks = []
-rom-patching = []
+rom-patching = ["dep:caliptra-mcu-rom-patch"]

@@ -14,6 +14,7 @@ members = [
     "common/mctp-vdm",
     "common/pldm",
     "common/poll",
+    "common/rom-patch",
     "common/testing",
     "common/emulator-state",
     "emulator/app",
@@ -292,6 +293,7 @@ caliptra-mcu-registers-generated = { path = "registers/generated-firmware" }
 caliptra-mcu-registers-generator = { path = "registers/generator" }
 caliptra-mcu-registers-systemrdl = { path = "registers/systemrdl" }
 caliptra-mcu-registers-systemrdl-new = { path = "registers/systemrdl-new" }
+caliptra-mcu-rom-patch = { path = "common/rom-patch" }
 caliptra-mcu-romtime = { path = "romtime" }
 
 # App related dependencies
