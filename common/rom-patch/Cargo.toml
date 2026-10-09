@@ -1,0 +1,16 @@
+# Licensed under the Apache-2.0 license
+
+[package]
+name = "caliptra-mcu-rom-patch"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+caliptra-mcu-error.workspace = true
+
+[features]
+# Places `apply` and its helpers in the ROM's `.text.nonpatchable` section.
+# Enabled only by the patch-capable MCU ROM; the host-side patch builder leaves
+# it off.
+rom = []

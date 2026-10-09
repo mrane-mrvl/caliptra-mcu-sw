@@ -9,7 +9,9 @@ use crate::utils::{manifest_file, manifest_file_for_profile};
 use crate::{CaliptraBuildArgs, PROJECT_ROOT};
 use caliptra_image_crypto::RustCrypto as Crypto;
 use caliptra_image_gen::{from_hw_format, ImageGeneratorCrypto};
-use caliptra_mcu_config_emulator::ROM_PATCH_REGION_START;
+use caliptra_mcu_config_emulator::{
+    ROM_PATCH_BLOB_SIZE, ROM_PATCH_BLOB_START, ROM_PATCH_REGION_START,
+};
 use caliptra_mcu_firmware_bundler::args::{BuildArgs, Commands, Common, LdArgs};
 use caliptra_mcu_firmware_bundler::manifest::RuntimeMemory;
 
@@ -79,7 +81,10 @@ pub fn rom_build(args: &CaliptraBuildArgs) -> Result<PathBuf> {
             // outside the patchable copy. Add it to the patching layout to fix.
             rom_link_args: rom_patching.then(|| {
                 format!(
-                    "--icf=none --orphan-handling=error --defsym=PATCH_FUNCS_START={ROM_PATCH_REGION_START:#x}"
+                    "--icf=none --orphan-handling=error \
+                     --defsym=PATCH_FUNCS_START={ROM_PATCH_REGION_START:#x} \
+                     --defsym=PATCH_BLOB_START={ROM_PATCH_BLOB_START:#x} \
+                     --defsym=PATCH_BLOB_LENGTH={ROM_PATCH_BLOB_SIZE:#x}"
                 )
             }),
             no_default_features: true,

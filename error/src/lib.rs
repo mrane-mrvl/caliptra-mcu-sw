@@ -478,6 +478,41 @@ impl McuError {
             "Failed to select a valid and functional vendor PK slot"
         ),
         (
+            ROM_PATCH_BOOTSTRAP_EXCEPTION,
+            0x6_0000,
+            "Exception in non-patchable ROM before the patched copy took over"
+        ),
+        (
+            ROM_PATCH_INVALID_SIZE,
+            0x6_0001,
+            "ROM patch shorter than its headers or larger than the blob"
+        ),
+        (
+            ROM_PATCH_END_HEADER_MISMATCH,
+            0x6_0002,
+            "ROM patch End Header missing at the declared patch size"
+        ),
+        (
+            ROM_PATCH_UNKNOWN_OPCODE,
+            0x6_0003,
+            "ROM patch operation has an unknown opcode"
+        ),
+        (
+            ROM_PATCH_EMPTY_OP,
+            0x6_0004,
+            "ROM patch operation carries no data"
+        ),
+        (
+            ROM_PATCH_OP_OVERRUN,
+            0x6_0005,
+            "ROM patch operation data runs into the End Header"
+        ),
+        (
+            ROM_PATCH_OP_OUT_OF_RANGE,
+            0x6_0006,
+            "ROM patch operation writes outside its target RAM"
+        ),
+        (
             ROM_COLD_BOOT_FW_MANIFEST_DOT_ERROR,
             0x1_001a,
             "Firmware manifest DOT command processing error"
