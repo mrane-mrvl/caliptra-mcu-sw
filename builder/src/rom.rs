@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 
+use crate::rom_patch::check_patchable_rom_elf;
 use crate::utils::{manifest_file, manifest_file_for_profile};
 use crate::{CaliptraBuildArgs, PROJECT_ROOT};
 use caliptra_image_crypto::RustCrypto as Crypto;
@@ -76,12 +77,12 @@ pub fn rom_build(args: &CaliptraBuildArgs) -> Result<PathBuf> {
             // identical machine code. Editing one function can make it differ from its twin, so
             // the linker stops folding them and symbols move. The patch builder fails if any
             // section or symbol address or size differs between the baseline and patched ELFs.
-            // --orphan-handling=error: fail the link if an input section (e.g. .srodata*) is not
-            // placed by the linker script. Otherwise the linker places it silently, possibly
-            // outside the patchable copy. Add it to the patching layout to fix.
+            // --emit-relocs: keep relocations in the ELF. `check_patchable_rom_elf` reads them to
+            // prove non-patchable code never refers to patchable code or data. It also fails the
+            // build if a loaded section lands outside the patching layout.
             rom_link_args: rom_patching.then(|| {
                 format!(
-                    "--icf=none --orphan-handling=error \
+                    "--icf=none --emit-relocs \
                      --defsym=PATCH_FUNCS_START={ROM_PATCH_REGION_START:#x} \
                      --defsym=PATCH_BLOB_START={ROM_PATCH_BLOB_START:#x} \
                      --defsym=PATCH_BLOB_LENGTH={ROM_PATCH_BLOB_SIZE:#x}"
@@ -94,6 +95,9 @@ pub fn rom_build(args: &CaliptraBuildArgs) -> Result<PathBuf> {
     };
 
     caliptra_mcu_firmware_bundler::execute(build_cmd)?;
+    if rom_patching {
+        check_patchable_rom_elf(&rom_binary.with_file_name(&target_name))?;
+    }
     let bundler_output = rom_binary.with_file_name(format!("{target_name}.bin"));
     if bundler_output != rom_binary {
         // The bundler always writes to the base binary name (e.g.

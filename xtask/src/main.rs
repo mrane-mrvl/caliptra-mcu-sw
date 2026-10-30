@@ -138,6 +138,20 @@ enum Commands {
         #[arg(long)]
         features: Option<String>,
     },
+    /// Build a ROM patch blob from two `rom-build --features rom-patching` ELFs
+    RomPatchBuild {
+        /// ELF of the ROM as built for tapeout
+        #[arg(long)]
+        baseline: PathBuf,
+
+        /// ELF of the same ROM with the fix applied
+        #[arg(long)]
+        modified: PathBuf,
+
+        /// Path to write the patch blob to
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Build and Run ROM image
     Rom {
         /// Run with tracing options
@@ -684,6 +698,21 @@ fn main() {
             })
             .map(|_| ())
         }
+        Commands::RomPatchBuild {
+            baseline,
+            modified,
+            out,
+        } => caliptra_mcu_builder::rom_patch_build(baseline, modified).and_then(|patch| {
+            std::fs::write(out, &patch.blob)?;
+            println!(
+                "ROM patch: {} operation(s), {} of {} B, written to {}",
+                patch.op_count,
+                patch.blob.len(),
+                caliptra_mcu_config_emulator::ROM_PATCH_BLOB_SIZE,
+                out.display()
+            );
+            Ok(())
+        }),
         Commands::Sizes { csv, variants } => {
             resolve_variants(variants.as_deref()).and_then(|resolved| {
                 sizes::run(

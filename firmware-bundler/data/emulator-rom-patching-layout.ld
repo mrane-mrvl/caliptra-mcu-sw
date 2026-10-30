@@ -41,6 +41,11 @@ MEMORY
   PATCH_TEXT  (rwx) : ORIGIN = PATCH_TEXT_START, LENGTH = PATCH_TEXT_LENGTH
 }
 
+/*
+ * Every loaded section placed below is listed in LAYOUT_SECTIONS in
+ * builder/src/rom_patch.rs, which fails the ROM build on any other loaded
+ * section. Change both together.
+ */
 SECTIONS
 {
     .text.nonpatchable :
@@ -130,32 +135,6 @@ SECTIONS
     {
         *(.eh_frame*)
     }
-
-    /*
-     * Non-allocated sections, listed so that `--orphan-handling=error` (set by the builder for
-     * this layout) only fires on unexpected sections.
-     */
-    .comment 0 : { *(.comment) }
-    .riscv.attributes 0 : { *(.riscv.attributes) }
-    .debug_info 0 : { *(.debug_info) }
-    .debug_abbrev 0 : { *(.debug_abbrev) }
-    .debug_line 0 : { *(.debug_line) }
-    .debug_line_str 0 : { *(.debug_line_str) }
-    .debug_str 0 : { *(.debug_str) }
-    .debug_str_offsets 0 : { *(.debug_str_offsets) }
-    .debug_addr 0 : { *(.debug_addr) }
-    .debug_loc 0 : { *(.debug_loc) }
-    .debug_loclists 0 : { *(.debug_loclists) }
-    .debug_ranges 0 : { *(.debug_ranges) }
-    .debug_rnglists 0 : { *(.debug_rnglists) }
-    .debug_aranges 0 : { *(.debug_aranges) }
-    .debug_frame 0 : { *(.debug_frame) }
-    .debug_pubnames 0 : { *(.debug_pubnames) }
-    .debug_pubtypes 0 : { *(.debug_pubtypes) }
-    /* Linker-synthesized; this lld reports them as orphans unless named. */
-    .symtab 0 : { *(.symtab) }
-    .shstrtab 0 : { *(.shstrtab) }
-    .strtab 0 : { *(.strtab) }
 }
 
 BSS_START = ADDR(.bss);
