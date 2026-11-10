@@ -25,6 +25,7 @@ caliptra-image-crypto.workspace = true
 caliptra-image-gen.workspace = true
 caliptra-image-types = { workspace = true, features = ["std"] }
 caliptra-image-fake-keys.workspace = true
+caliptra-ureg.workspace = true
 chrono.workspace = true
 crc.workspace = true
 ecdsa.workspace = true
@@ -64,6 +65,7 @@ defmt-decoder.workspace = true
 rand.workspace = true
 random-port.workspace = true
 caliptra-mcu-registers-generated.workspace = true
+caliptra-mcu-rom-patch.workspace = true
 sha2.workspace = true
 simple_logger.workspace = true
 openssl.workspace = true
