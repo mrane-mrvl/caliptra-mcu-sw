@@ -61,8 +61,9 @@ mod test {
     use caliptra_mcu_config_emulator::flash::{
         PartitionTable, StandAloneChecksumCalculator, IMAGE_A_PARTITION, STAGING_PARTITION,
     };
-    use caliptra_mcu_hw_model::{DefaultHwModel, Fuses, InitParams, McuHwModel};
+    use caliptra_mcu_hw_model::{DefaultHwModel, Fuses, InitParams, McuHwModel, McuManager};
     use caliptra_mcu_testing_common::{i3c::DynamicI3cAddress, DeviceLifecycle, EmulatorState};
+    use caliptra_ureg::MmioMut;
     use random_port::PortPicker;
     use std::io::{BufRead, BufReader, Write};
     use std::sync::atomic::AtomicU32;
@@ -136,6 +137,10 @@ mod test {
         pub example_app: bool,
         /// Cargo profile to use for a from-source runtime build.
         pub profile: Option<&'a str>,
+        /// Bytes written to MCU SRAM at this address after the model is
+        /// created and before it boots (e.g. a ROM patch blob). The length
+        /// must be a multiple of 4.
+        pub sram_preload: Option<(u32, Vec<u8>)>,
         /// Override the Caliptra firmware SVN. Forces a from-source
         /// Caliptra FW + SoC manifest build (ignoring any prebuilt
         /// Caliptra FW) so the reported `FW_INFO.fw_svn` is known. Only
@@ -170,6 +175,7 @@ mod test {
                 seeded_log_entries: None,
                 example_app: false,
                 profile: None,
+                sram_preload: None,
                 caliptra_svn: None,
             }
         }
@@ -560,7 +566,9 @@ mod test {
         )
         .unwrap();
 
-        let mcu_rom = if params.firmware_prefix.is_some() && params.rom_feature.is_none() {
+        let mcu_rom = if let Some(rom) = &params.custom_mcu_rom {
+            rom.clone()
+        } else if params.firmware_prefix.is_some() && params.rom_feature.is_none() {
             if params.fw_manifest_dot_hitless {
                 ROM_FW_MANIFEST_DOT_HITLESS.clone()
             } else {
@@ -744,7 +752,7 @@ mod test {
             params.seeded_log_entries,
         );
 
-        caliptra_mcu_hw_model::new(InitParams {
+        let mut hw = caliptra_mcu_hw_model::new_unbooted(InitParams {
             fuses: Fuses {
                 fuse_pqc_key_type: params.vendor_pqc_type.map(|t| t as u32).unwrap_or(0),
                 vendor_pk_hash,
@@ -777,7 +785,27 @@ mod test {
             use_strap_secrets: params.use_strap_secrets,
             ..Default::default()
         })
-        .unwrap()
+        .unwrap();
+        if let Some((addr, bytes)) = &params.sram_preload {
+            write_mcu_sram(&mut hw, *addr, bytes);
+        }
+        hw.boot().unwrap();
+        hw
+    }
+
+    /// Writes `bytes` to MCU SRAM at `addr` over the model's bus.
+    fn write_mcu_sram(hw: &mut DefaultHwModel, addr: u32, bytes: &[u8]) {
+        assert!(
+            bytes.len().is_multiple_of(4),
+            "SRAM preload must be whole words"
+        );
+        let mut mcu = hw.mcu_manager();
+        let mmio = mcu.mmio_mut();
+        for (i, word) in bytes.chunks_exact(4).enumerate() {
+            let word = u32::from_le_bytes(word.try_into().unwrap());
+            // SAFETY: the model's bus decodes MCU SRAM addresses.
+            unsafe { mmio.write_volatile((addr as usize + i * 4) as *mut u32, word) };
+        }
     }
 
     fn write_valid_partition_table_for_runtime_flash_load(flash: &mut Vec<u8>) {

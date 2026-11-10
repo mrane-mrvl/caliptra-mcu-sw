@@ -25,6 +25,7 @@ mod pldm_fw_pkg;
 mod precheckin;
 mod registers;
 mod rom;
+mod rom_patching_test;
 mod runtime;
 mod sizes;
 mod stack_guard;
@@ -151,6 +152,13 @@ enum Commands {
         /// Path to write the patch blob to
         #[arg(long)]
         out: PathBuf,
+    },
+    /// Run the ROM patching integration test cases: build each case's fix
+    /// into the patch-capable ROM, build the patch, and boot the ROM with it
+    RomPatchingTest {
+        /// Case to run (repeatable). Default: every case
+        #[arg(long = "case")]
+        cases: Vec<String>,
     },
     /// Build and Run ROM image
     Rom {
@@ -713,6 +721,7 @@ fn main() {
             );
             Ok(())
         }),
+        Commands::RomPatchingTest { cases } => rom_patching_test::run(cases),
         Commands::Sizes { csv, variants } => {
             resolve_variants(variants.as_deref()).and_then(|resolved| {
                 sizes::run(

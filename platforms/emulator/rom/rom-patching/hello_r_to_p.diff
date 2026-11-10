@@ -1,0 +1,13 @@
+diff --git a/rom/src/rom.rs b/rom/src/rom.rs
+index 04e3ba420..8e9990943 100644
+--- a/rom/src/rom.rs
++++ b/rom/src/rom.rs
+@@ -833,7 +833,7 @@ pub struct RomParameters<'a> {
+ 
+ #[inline(always)]
+ pub fn rom_start(params: RomParameters) {
+-    caliptra_mcu_romtime::println!("[mcu-rom] Hello from ROM");
++    caliptra_mcu_romtime::println!("[mcu-rom] Hello from POM");
+ 
+     // Create ROM environment with all peripherals
+     let mut env = RomEnv::new();
