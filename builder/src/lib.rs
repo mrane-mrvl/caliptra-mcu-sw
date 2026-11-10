@@ -8,6 +8,7 @@ pub mod firmware;
 pub mod flash_image;
 pub mod offline_signing;
 mod rom;
+mod rom_patch;
 mod runtime;
 mod utils;
 
@@ -17,6 +18,7 @@ pub use all::{
 pub use caliptra::{AuthManifestOwnerConfig, AuthManifestPubKeysPaths, CaliptraBuilder, ImageCfg};
 pub use offline_signing::*;
 pub use rom::{append_rom_digest, rom_build, rom_size_for_platform, test_rom_build};
+pub use rom_patch::{rom_patch_build, RomPatch};
 pub use runtime::{bare_metal_build, runtime_build_with_apps};
 
 #[derive(Default, Clone)]
